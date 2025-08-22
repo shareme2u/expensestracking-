@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Daily Expenses Tracker</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f7fb;
+      padding: 20px;
+      text-align: center;
+    }
+    h2 {
+      color: #333;
+    }
+    button {
+      padding: 12px 20px;
+      margin: 10px;
+      border: none;
+      background: #4285f4;
+      color: white;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #357ae8;
+    }
+    #dataInput {
+      margin: 20px 0;
+    }
+    input {
+      padding: 10px;
+      margin: 5px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    #output {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 6px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Daily Income & Expenses Tracker</h2>
+  
+  <div id="dataInput">
+    <input type="text" id="description" placeholder="Description" />
+    <input type="number" id="amount" placeholder="Amount" />
+    <button onclick="addEntry()">Add Entry</button>
+  </div>
+
+  <button id="signinBtn">Sign in with Google</button>
+  <button onclick="backupToDrive()">Backup to Google Drive</button>
+
+  <div id="output"></div>
+
+  <script>
+    let gapiInited = false;
+    let tokenClient;
+    let accessToken = null;
+    let entries = [];
+
+    const CLIENT_ID = "276091974001-0iu5dq4mmoo99e4diie1d4neb94j1sfi.apps.googleusercontent.com";
+    const API_KEY = ""; // Optional if you want extra APIs
+    const SCOPES = "https://www.googleapis.com/auth/drive.file";
+
+    // Load GAPI
+    function gapiLoaded() {
+      gapi.load('client', initializeGapiClient);
+    }
+
+    async function initializeGapiClient() {
+      await gapi.client.init({
+        apiKey: API_KEY,
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+      });
+      gapiInited = true;
+    }
+
+    window.onload = function() {
+      // Load gapi
+      gapiLoaded();
+
+      // Initialize token client
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+          accessToken = tokenResponse.access_token;
+          alert("Signed in successfully!");
+        },
+      });
+
+      document.getElementById("signinBtn").onclick = () => {
+        tokenClient.requestAccessToken();
+      };
+    };
+
+    // Add entry
+    function addEntry() {
+      const desc = document.getElementById("description").value;
+      const amt = document.getElementById("amount").value;
+      if (!desc || !amt) return alert("Enter description and amount");
+      const entry = { description: desc, amount: amt, date: new Date().toISOString() };
+      entries.push(entry);
+      renderEntries();
+      document.getElementById("description").value = "";
+      document.getElementById("amount").value = "";
+    }
+
+    function renderEntries() {
+      let html = "<h3>Entries</h3><ul>";
+      entries.forEach(e => {
+        html += `<li>${e.date.split("T")[0]} - ${e.description}: ₹${e.amount}</li>`;
+      });
+      html += "</ul>";
+      document.getElementById("output").innerHTML = html;
+    }
+
+    // Backup to Drive
+    async function backupToDrive() {
+      if (!accessToken) return alert("Please sign in first!");
+
+      const fileContent = JSON.stringify(entries, null, 2);
+      const file = new Blob([fileContent], { type: "application/json" });
+
+      const metadata = {
+        name: "expenses_backup.json",
+        mimeType: "application/json"
+      };
+
+      const form = new FormData();
+      form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+      form.append("file", file);
+
+      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST",
+        headers: new Headers({ Authorization: "Bearer " + accessToken }),
+        body: form
+      });
+
+      const data = await res.json();
+      console.log(data);
+      alert("Backup saved to Google Drive!");
+    }
+  </script>
+</body>
+</html>
